@@ -43,15 +43,19 @@ YAWN_CONSEC_FRAMES = 15
 YAWN_ALERT_COUNT = 2 
 HEAD_TILT_ANGLE_THRESH = 25 # degrees
 
-
 # ------------------- Counters & Timers -------------------
 ear_counter = 0
 yawn_frame_counter = 0
 yawn_event_counter = 0
 yawn_in_progress = False
-eye_closed_start = None
 head_tilt_start = None
 head_tilt_active = False
+
+# Alert message variables
+alert_message = ""
+alert_color = (0, 0, 0)
+alert_bg = (0, 0, 0)
+alert_end_time = 0
 
 # ------------------- Landmark Indices -------------------
 LEFT_EYE_IDX  = [33, 160, 158, 133, 153, 144]
@@ -86,8 +90,7 @@ while True:
             ear = (compute_EAR(left_eye) + compute_EAR(right_eye)) / 2.0
             mar = compute_MAR(mouth)
 
-      # Face rectangle (Green)
-            # -------------------
+            # Face rectangle (Green)
             xs = [lm[0] for lm in landmarks]
             ys = [lm[1] for lm in landmarks]
             x_min, x_max = min(xs), max(xs)
@@ -99,11 +102,14 @@ while True:
                 ear_counter += 1
                 if ear_counter >= EYE_CONSEC_FRAMES:
                     play_alert(sleep_alert)
-                    alert_message = "Eyes Closed"
+                    alert_message = "DROWSY! Eyes Closed"
+                    alert_color = (255, 255, 255)
+                    alert_bg = (0, 0, 255)  # Red background
                     alert_end_time = time.time() + 5
                     ear_counter = 0
             else:
                 ear_counter = 0
+
             # ------------------- Yawning Detection -------------------
             if mar > MAR_THRESH:
                 yawn_frame_counter += 1
@@ -120,41 +126,44 @@ while True:
 
             if yawn_event_counter >= YAWN_ALERT_COUNT:
                 play_alert(yawn_alert)
-                alert_message = "Too Many Yawns"
+                alert_message = "ALERT! Too Many Yawns"
+                alert_color = (255, 255, 255)
+                alert_bg = (255, 0, 0)  # Blue background
                 alert_end_time = time.time() + 5
-                yawn_event_counter = 0 # reset after alert
+                yawn_event_counter = 0
 
             # ------------------- Head Tilt Detection -------------------
-            # Using ears and shoulders (if visible) for tilt approximation
-            left_ear_pos = landmarks[234]  # approximate left ear
-            right_ear_pos = landmarks[454]  # approximate right ear
+            left_ear_pos = landmarks[234]  
+            right_ear_pos = landmarks[454]  
 
-            # horizontal line for shoulders can be approximated from ears if shoulders not visible
             dx = right_ear_pos[0] - left_ear_pos[0]
             dy = right_ear_pos[1] - left_ear_pos[1]
-            angle = math.degrees(math.atan2(dy, dx))  # head tilt in degrees
+            angle = math.degrees(math.atan2(dy, dx))  
 
             if abs(angle) > HEAD_TILT_ANGLE_THRESH:
                 if head_tilt_start is None:
                     head_tilt_start = time.time()
                 elif time.time() - head_tilt_start > 1.0 and not head_tilt_active:
-                    cv2.putText(frame, "HEAD TILT!", (30, 150),
-                                cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0,255,255), 3)
                     play_alert(headtilt_alert)
+                    alert_message = "HEAD TILT DETECTED!"
+                    alert_color = (0, 0, 0)
+                    alert_bg = (0, 255, 255)  # Yellow background
+                    alert_end_time = time.time() + 5
                     head_tilt_active = True
             else:
                 head_tilt_start = None
                 head_tilt_active = False
 
-            # ------------------- Face Bounding Box -------------------
-            xs = [p[0] for p in landmarks]
-            ys = [p[1] for p in landmarks]
-            x1, y1 = min(xs), min(ys)
-            x2, y2 = max(xs), max(ys)
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0,255,0), 2)
-
-            # Draw landmarks for visualization
+            # Draw landmarks
             mp_drawing.draw_landmarks(frame, face_landmarks, mp_face_mesh.FACEMESH_TESSELATION)
+
+    # ------------------- Show Alerts (Sticky with Background) -------------------
+    if alert_message and time.time() < alert_end_time:
+        (text_w, text_h), _ = cv2.getTextSize(alert_message, cv2.FONT_HERSHEY_SIMPLEX, 1.5, 3)
+        x, y = 30, 50
+        cv2.rectangle(frame, (x-10, y-40), (x + text_w + 10, y + 10), alert_bg, -1)
+        cv2.putText(frame, alert_message, (x, y), cv2.FONT_HERSHEY_SIMPLEX,
+                    1.5, alert_color, 3)
 
     cv2.imshow("Driver Drowsiness Detection", frame)
     if cv2.waitKey(1) & 0xFF == 27:
