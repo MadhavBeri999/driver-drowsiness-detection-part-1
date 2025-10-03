@@ -1,4 +1,5 @@
 {
     "sleep_alert": "sounds/sleepingEnglish.wav",
-    "yawn_alert": "sounds/yawningHindi.wav"
+    "yawn_alert": "sounds/yawningHindi.wav",
+    "headtilt_alert": "sounds/headTilt.wav"
 }
